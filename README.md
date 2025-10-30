@@ -1,3 +1,30 @@
+# Connexion AzureOpenAI (gpt-realtime)
+
+1. contenu du .env ( à ajouter en fin de fichier)
+
+AZURE_OPENAI_ENDPOINT=adm1-m2nz8401-swedencentral.openai.azure.com
+AZURE_OPENAI_API_KEY=XXXXXXXXXXXXXXXXXXXXXXX
+AZURE_OPENAI_DEPLOYMENT_NAME=gpt-realtime
+AZURE_OPENAI_API_VERSION=2025-04-01-preview
+
+2. déploiement
+```bash
+# construction image
+dkb -t avr-sts-azureopenai -f avr-sts-azureopenai.dockerfile .
+
+#déploiement
+dkc -f docker-compose-azure-gptrealtime.yml up -d --force-recreate
+```
+3. tests de bon focntionnement
+- test 1
+```bash
+docker logs -f avr-core             # dans une console
+docker logs -f avr-sts-azureopenai  # dans une autre console
+docker exec -it avr-asterisk asterisk -rvvv  # dans une autre console
+*CLI> channel originate LOCAL/5001@demo extension 5001@demo
+
+```
+
 # AVR Infrastructure (avr-infra)
 
 [![Discord](https://img.shields.io/discord/1347239846632226998?label=Discord&logo=discord)](https://discord.gg/DFTU69Hg74)
