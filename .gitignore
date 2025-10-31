@@ -5,6 +5,7 @@ ollama
 ollama-web
 traefik
 .env
+*.pem
 .keys
 docker-compose-*.yml
 !docker-compose-app.yml

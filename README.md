@@ -1,27 +1,36 @@
 # Connexion AzureOpenAI (gpt-realtime)
 
-1. contenu du .env ( à ajouter en fin de fichier)
+1. contenu du .env 
+- copier .env.example vers .env
 
+- à ajouter en fin de fichier .env:
 AZURE_OPENAI_ENDPOINT=adm1-m2nz8401-swedencentral.openai.azure.com
 AZURE_OPENAI_API_KEY=XXXXXXXXXXXXXXXXXXXXXXX
 AZURE_OPENAI_DEPLOYMENT_NAME=gpt-realtime
 AZURE_OPENAI_API_VERSION=2025-04-01-preview
+
+- modifier les valeurs de ces variables si nécessaire
 
 2. déploiement
 ```bash
 # construction image
 dkb -t avr-sts-azureopenai -f avr-sts-azureopenai.dockerfile .
 
-#déploiement
+#déploiement hors opt
 dkc -f docker-compose-azure-gptrealtime.yml up -d --force-recreate
+
+#déploiement a l'opt
+dkc -f docker-compose-azure-gptrealtime-optnc-dev.yml up -d --force-recreate # prérequis: certificat présent dans ./certs/
+
 ```
 3. tests de bon focntionnement
 - test 1
 ```bash
 docker logs -f avr-core             # dans une console
 docker logs -f avr-sts-azureopenai  # dans une autre console
-docker exec -it avr-asterisk asterisk -rvvv  # dans une autre console
-*CLI> channel originate LOCAL/5001@demo extension 5001@demo
+docker exec -it avr-asterisk asterisk -rx "channel originate LOCAL/5001@demo extension 5001@demo" # dans une autre console
+# docker exec -it avr-asterisk asterisk -rvvv  # dans une autre console
+# *CLI> channel originate LOCAL/5001@demo extension 5001@demo
 
 ```
 
