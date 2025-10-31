@@ -34,6 +34,19 @@ docker exec -it avr-asterisk asterisk -rx "channel originate LOCAL/5001@demo ext
 
 ```
 
+- test 2 : appel depuis microsip
+   - créer un nouveau compte 
+      - nom du compte : Test AVR AzureOpenAI
+      - serveur SIP: 127.0.0.1
+      - nom utilisateur: 1000
+      - domaine: 127.0.0.1
+      - mot de passe : 1000
+      - nom a afficher: 1000
+      - Chiffrement: désactivé
+      - Transport: TCP
+      - Adresse punlique : Auto
+   - Sauvegarder puis appeler le 5001
+
 # AVR Infrastructure (avr-infra)
 
 [![Discord](https://img.shields.io/discord/1347239846632226998?label=Discord&logo=discord)](https://discord.gg/DFTU69Hg74)
