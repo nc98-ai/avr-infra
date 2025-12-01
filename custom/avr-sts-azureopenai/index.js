@@ -256,6 +256,21 @@ const handleClientConnection = (clientWs) => {
             );
             break;
 
+          // Azure
+          case "response.output_audio.delta":          
+          
+
+          case "response.output_audio_transcript.delta":
+            // si tu veux aussi renvoyer les sous-titres vers le core
+            clientWs.send(
+              JSON.stringify({
+                type: "transcript",
+                role: "agent",
+                text: message.delta,
+              })
+            );
+
+          // OpenAI
           case "response.audio.delta":
             const audioChunk = Buffer.from(message.delta, "base64");
             const audioFrames = processOpenAIAudioChunk(audioChunk);
