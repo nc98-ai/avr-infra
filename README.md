@@ -9,14 +9,16 @@ AZURE_OPENAI_DEPLOYMENT_NAME=gpt-realtime
 AZURE_OPENAI_API_VERSION=2025-04-01-preview
 ```
 
+
 2. creation d'un fichier de build dédié -> avr-sts-azureopenai.dockerfile
 ```dockerfile
 # Partir de l'image de base existante
-FROM agentvoiceresponse/avr-sts-openai:latest
+FROM agentvoiceresponse/avr-sts-azureopenai:latest
 
 # Copier uniquement notre fichier modifié pour écraser celui dans l'image
 COPY custom/avr-sts-azureopenai/index.js /usr/src/app/index.js
 ```
+
 
 3. génération de l'image a partir de ce build
 ```bash
@@ -24,7 +26,9 @@ COPY custom/avr-sts-azureopenai/index.js /usr/src/app/index.js
 dkb -t avr-sts-azureopenai -f avr-sts-azureopenai.dockerfile .
 ```
 
+
 4. creation d'un fichier dcompose pour azure openai realtime -> docker-compose-azure-gptrealtime.yml
+
 
 5. creation de fichiers de config customisé pour asterisk dans le dossier asterisk/conf
 ces fichiers sont pris en compte au demarage d'asterisk grace:
@@ -33,10 +37,13 @@ ces fichiers sont pris en compte au demarage d'asterisk grace:
          - ./asterisk/conf/manager.conf:/etc/asterisk/my_manager.conf
    - aux fichier originaux du conteneur qui continennet pour chacun d'entre eux les directives **#include "my_XXXX.conf"**
 
+
+
 6. déploiement des conteneurs a partir de ce dcompose
 ```bash
 dkc -f docker-compose-azure-gptrealtime.yml up -d --force-recreate
 ```
+
 
 7. tests basique de bon focntionnement
 - test 1
@@ -47,7 +54,8 @@ docker exec -it avr-asterisk asterisk -rvvv  # dans une autre console
 *CLI> channel originate LOCAL/5001@demo extension 5001@demo
 ```
 
-8. tests d'appel
+
+8. tests d'appel téléphonique
    - Avec Microsip installé sous Windows, ajouter un compte de la maniere suivante:
       - Nom compte : AVR  test Azure
       - serveur sip: 127.0.0.1
@@ -63,6 +71,8 @@ docker exec -it avr-asterisk asterisk -rvvv  # dans une autre console
       - Signalisation: 15
    - Enregistrer puis appeler le 5001
    - Parler au micro
+
+
 
 
 
