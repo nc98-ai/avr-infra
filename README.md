@@ -1,29 +1,72 @@
-# Connexion AzureOpenAI (gpt-realtime)
+# Configuration pour connexion AzureOpenAI (gpt-realtime)
 
 1. contenu du .env ( à ajouter en fin de fichier)
 
+```bash
 AZURE_OPENAI_ENDPOINT=adm1-m2nz8401-swedencentral.openai.azure.com
 AZURE_OPENAI_API_KEY=XXXXXXXXXXXXXXXXXXXXXXX
 AZURE_OPENAI_DEPLOYMENT_NAME=gpt-realtime
 AZURE_OPENAI_API_VERSION=2025-04-01-preview
+```
 
-2. déploiement
+2. creation d'un fichier de build dédié -> avr-sts-azureopenai.dockerfile
+```dockerfile
+# Partir de l'image de base existante
+FROM agentvoiceresponse/avr-sts-openai:latest
+
+# Copier uniquement notre fichier modifié pour écraser celui dans l'image
+COPY custom/avr-sts-azureopenai/index.js /usr/src/app/index.js
+```
+
+3. génération de l'image a partir de ce build
 ```bash
 # construction image
 dkb -t avr-sts-azureopenai -f avr-sts-azureopenai.dockerfile .
+```
 
-#déploiement
+4. creation d'un fichier dcompose pour azure openai realtime -> docker-compose-azure-gptrealtime.yml
+
+5. creation de fichiers de config customisé pour asterisk dans le dossier asterisk/conf
+ces fichiers sont pris en compte au demarage d'asterisk grace:
+   - a la direcive 'volumes' dans le fichier dcompose. Exemple: 
+      volumes:
+         - ./asterisk/conf/manager.conf:/etc/asterisk/my_manager.conf
+   - aux fichier originaux du conteneur qui continennet pour chacun d'entre eux les directives **#include "my_XXXX.conf"**
+
+6. déploiement des conteneurs a partir de ce dcompose
+```bash
 dkc -f docker-compose-azure-gptrealtime.yml up -d --force-recreate
 ```
-3. tests de bon focntionnement
+
+7. tests basique de bon focntionnement
 - test 1
 ```bash
 docker logs -f avr-core             # dans une console
 docker logs -f avr-sts-azureopenai  # dans une autre console
 docker exec -it avr-asterisk asterisk -rvvv  # dans une autre console
 *CLI> channel originate LOCAL/5001@demo extension 5001@demo
-
 ```
+
+8. tests d'appel
+   - Avec Microsip installé sous Windows, ajouter un compte de la maniere suivante:
+      - Nom compte : AVR  test Azure
+      - serveur sip: 127.0.0.1
+      - Nom utilisateur: 5001
+      - Domaine: 127.0.0.1
+      - Login: 5001
+      - Mot de passe: 5001
+      - Nom afficher : 5001
+      - Chiffrement : désactivé
+      - Transport: TCP
+      - Adresse publique : Auto
+      - Actualiser l'enregistremenrt: 500
+      - Signalisation: 15
+   - Enregistrer puis appeler le 5001
+   - Parler au micro
+
+
+
+
 
 # AVR Infrastructure (avr-infra)
 
