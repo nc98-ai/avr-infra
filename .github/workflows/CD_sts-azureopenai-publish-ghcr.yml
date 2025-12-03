@@ -53,6 +53,7 @@ jobs:
           fi
           echo "tag=$TAG" >> $GITHUB_OUTPUT
 
+
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
@@ -60,6 +61,10 @@ jobs:
           file: ./avr-sts-azureopenai.dockerfile
           push: true
           platforms: linux/amd64
+          # Label pour lier au repository
+          labels: |
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+          # Nom unique pour cette image (ajout de -sts)
           tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ steps.vars.outputs.tag }}
+            ghcr.io/${{ github.repository }}-sts_azureopenai:latest
+            ghcr.io/${{ github.repository }}-sts_azureopenai:${{ steps.vars.outputs.tag }}
