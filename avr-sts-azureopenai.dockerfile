@@ -27,6 +27,8 @@ RUN npm install \
     axios \
     dotenv \
     csv-parse \
+    fuse.js \
+    natural \ 
     @alexanderolsen/libsamplerate-js
 
 # 6. On remet les permissions pour l'utilisateur par défaut 'node'
