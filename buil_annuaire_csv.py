@@ -8,18 +8,52 @@ NB_LIGNES = 20000
 # Données contextuelles (Nouvelle-Calédonie)
 # Mélange de noms d'origines diverses présentes en NC (Kanak, Européen, Océanien, Asiatique)
 noms_famille = [
-    "WAMYTAN", "LAFLEUR", "MARTIN", "GOMES", "NEOUTYINE", "MAPOU", "FROGIER", 
-    "DANG", "TJIBAOU", "UKEIWE", "METZDORF", "BOUTIN", "SIONE", "FAIVRE",
-    "POADJA", "NAISSELINE", "XAWIE", "IWE", "GERMAIN", "MERCIER", "LEMOINE",
-    "BOUTEILLER", "TUI", "FIAFIALOTO", "NGUYEN", "MICHEL", "BERNIER", "ROJO",
-    "KAMO", "GOA", "QAEZE", "WENDT", "SAMINADIN", "ROLLAND", "TEIN","FAFIN", "TOURTE"
+    # Kanak
+    "WAMYTAN", "MAPOU", "NEAOUTYINE", "TJIBAOU", "XOWIE", "POADJA", "NAISSELINE", "TEIN", "GOA",
+    "UKEIWE", "IWA", "KAUMA", "BOUANAOUE", "WAKANUMUNE", "GORODEY", "BOA", "WASHETINE", "NEPORO",
+    "QAEZE", "WENDT", "DIKE", "HNAEJE", "DOOI", "TIARE", "MOLALA", "NONMEU", "WADRAWANE", "ZONGO",
+    # Européen / Caldoche
+    "LAFLEUR", "FROGIER", "METZDORF", "MARTIN", "BERNARD", "THOMAS", "PETIT", "ROBERT", "RICHARD",
+    "DURAND", "DUBOIS", "MOREAU", "LAURENT", "SIMON", "MICHEL", "LEFEBVRE", "LEROY", "ROUX", "DAVID",
+    "BERTRAND", "ROUGERIE", "DALY", "HAGEN", "PENTAENIUS", "BOUTIN", "MERCIER", "GERMAIN", "LEMOINE",
+    "FAIVRE", "ROLLAND", "GAILLARD", "BARBIER", "ARNAUD", "GIRAUD", "FABRE", "BLANC", "GUERIN",
+    # Wallisien / Futunien / Tahitien
+    "SIONE", "TUI", "FIAFIALOTO", "KULIMOETOKE", "LIKAFIA", "MANUKA", "SIAPO", "VAKAUTA", "TEHEIURA",
+    "FAUA", "LOLOHEA", "TULITAU", "SOSEFO", "VEA", "MAFILEO", "TUFELE", "UHILA", "KOLIVAI", "FATUPUA",
+    # Asiatique / Autres
+    "NGUYEN", "TRAN", "DANG", "PHAM", "LE", "VO", "WONG", "LEE", "SALIGH", "HASSAN", "ALI", "ROJO"
 ]
 
 prenoms = [
-    "Jean", "Marie", "Jacques", "Wary", "Isée", "Sonia", "Philippe", "Rock", 
-    "Louis", "Suzanne", "Soane", "Malia", "Pierre", "Kowi", "Yeiwene", 
-    "Denise", "Raymonde", "Seleone", "Steeve", "Alphonse", "Kue", "Lydie",
-    "Nicolas", "Thomas", "Sarah", "Elodie", "Franck", "Mikaël", "Océane"
+    "Jean", "Marie", "Jacques", "Wary", "Isée", "Sonia", "Philippe", "Rock", "Louis", 
+    "Suzanne", "Soane", "Malia", "Pierre", "Kowi", "Yeiwene", "Denise", "Raymonde", 
+    "Seleone", "Steeve", "Alphonse", "Kue", "Lydie", "Nicolas", "Thomas", "Sarah", 
+    "Elodie", "Franck", "Mikaël", "Océane", "Paul", "Nathalie", "Michel", "Isabelle",
+    "Alain", "Sylvie", "Patrick", "Catherine", "Stéphane", "Véronique", "David",
+    "Christine", "Daniel", "Martine", "Laurent", "Valérie", "Christophe", "Sandrine",
+    "Pascal", "Sophie", "Eric", "Céline", "Olivier", "Chantal", "Thierry", "Béatrice",
+    "Gilles", "Aurélie", "François", "Monique", "Bernard", "Caroline", "Frédéric",
+    "Anne", "Didier", "Nicole", "Christian", "Julie", "Bruno", "Laurence", "Marc",
+    "Virginie", "Jérôme", "Emilie", "Guillaume", "Karine", "Alexandre", "Stéphanie",
+    "Julien", "Françoise", "Vincent", "Camille", "Sébastien", "Dominique", "Arnaud",
+    "Corinne", "Claude", "Elise", "Lucas", "Léa", "Enzo", "Manon", "Nathan", "Chloé",
+    "Mathis", "Emma", "Gabriel", "Jade", "Ethan", "Lola", "Noah", "Inès", "Raphaël",
+    "Clara", "Yanis", "Louna", "Hugo", "Mia", "Arthur", "Zoé", "Théo", "Alice",
+    "Jules", "Louise", "Maël", "Juliette", "Tom", "Léna", "Clément", "Eva", "Maxime",
+    "Nina", "Antoine", "Anaïs", "Mathéo", "Romane", "Pauline", "Léo", "Lucie", "Axel",
+    "Jeanne", "Baptiste", "Agathe", "Alexis", "Charlotte", "Valentin", "Margaux",
+    "Romain", "Mathilde", "Florian", "Justine", "Dimitri", "Ophélie", "Loïc", "Marion",
+    "Kevin", "Morgane", "Anthony", "Laura", "Adrien", "Amandine", "Benjamin", "Mélanie",
+    "Cédric", "Audrey", "Damien", "Alexandra", "Grégory", "Elodie", "Matthieu", "Jessica",
+    "Fabien", "Laetitia", "Ludovic", "Magali", "Jérémy", "Vanessa", "Arnaud", "Delphine",
+    "Waimo", "Iene", "Hnawia", "Wadrane", "Xan", "Yamel", "Drehu", "Nengone", "Tokanod",
+    "Sosefo", "Pelenato", "Mose", "Paulo", "Lavelua", "Sose", "Kalala", "Sefo", "Tino",
+    "Vito", "Petelo", "Mikaele", "Lino", "Savelio", "Falakika", "Atelemo", "Epifano",
+    "Sipiliano", "Valelio", "Setefano", "Lolesio", "Polikalepo", "Kikiforo", "Telesia",
+    "Ana", "Maria", "Losa", "Sofia", "Vaimalama", "Hinatea", "Moana", "Teiva", "Manua",
+    "Ariii", "Teva", "Maeva", "Heifara", "Roimata", "Vaitea", "Titouan", "Moe", "Hina",
+    "Poema", "Here", "Vahine", "Tiare", "Marama", "Fetia", "Reva", "Noa", "Tehani",
+    "Kaï", "Kilian", "Nolan", "Timéo", "Mahé", "Malo", "Naël", "Soan", "Liam", "Milo"
 ]
 
 villes = [
