@@ -64,6 +64,8 @@ const connectToAzureOpenAI = () => {
       "api-key": apiKey,
       "OpenAI-Beta": "realtime=v1",
     },
+    // Ajout de cette ligne pour contourner le proxy d'entreprise
+    rejectUnauthorized: false     
   });
 };
 

@@ -1,0 +1,116 @@
+services:
+  avr-core:
+    image: agentvoiceresponse/avr-core
+    platform: linux/x86_64
+    container_name: avr-core
+    restart: always
+    environment:
+      - PORT=5001 
+      # MODIFICATION CRITIQUE : Faire pointer le core vers le nouveau service Azure STS
+      - STS_URL=ws://avr-sts-azureopenai:6030
+    ports:
+      - 5001:5001
+    networks:
+      - avr
+
+  # --- DEBUT DE LA SECTION MODIFIÉE ---
+  avr-sts-azureopenai:
+    # On utilise l'image que vous avez créée localement
+    image: avr-sts-azureopenai:latest
+    platform: linux/x86_64
+    container_name: avr-sts-azureopenai
+    restart: always
+    ports:
+      - "6030:6030"
+    environment:
+      # --- Paramètres spécifiques à Azure OpenAI ---
+      # Remplacez les valeurs ci-dessous par vos informations
+      # - AZURE_OPENAI_ENDPOINT=${AZURE_OPENAI_ENDPOINT:-avr}  
+      # - AZURE_OPENAI_API_KEY=${AZURE_OPENAI_API_KEY:-your-azure-openai-api-key}
+      # - AZURE_OPENAI_DEPLOYMENT_NAME=${AZURE_OPENAI_DEPLOYMENT_NAME:-gpt-realtime}
+      # - AZURE_OPENAI_API_VERSION=${AZURE_OPENAI_API_VERSION:-2024-05-01-preview}
+
+      # # --- Paramètres communs de l'application ---
+      # - PORT=6030
+      # # La variable OPENAI_INSTRUCTIONS est toujours utilisée par l'application pour le prompt système
+      # - OPENAI_INSTRUCTIONS="Vous êtes un assistant vocal connecté à Azure."
+      # - AMI_URL=${AMI_URL:-http://avr-ami:6006}
+
+        # --- Paramètres spécifiques ---
+        AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT}
+        AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY}
+        AZURE_OPENAI_DEPLOYMENT_NAME: ${AZURE_OPENAI_DEPLOYMENT_NAME}
+        AZURE_OPENAI_API_VERSION: ${AZURE_OPENAI_API_VERSION}
+        
+        # --- Paramètres communs ---
+        PORT: 6030
+        AMI_URL: ${AMI_URL:-http://avr-ami:6006}
+        
+        # --- INJECTION DU CSV ICI ---
+        OPENAI_INSTRUCTIONS: |
+          Tu es un assistant vocal qui a un rôle de téléconseiller pour l'entreprise de télécommunications OPT-NC située en Nouvelle-Calédonie.
+          À ce titre, tu dois aider les clients à obtenir un numéro de téléphone à partir d'un nom ou bien, obtenir un nom ou une adresse à partir d'un numéro de téléphone.
+
+          Utilise les données CSV ci-dessous pour retrouver les informations des clients.
+          
+          --- DÉBUT CSV ---
+          nom,prenom,telephone,adresse,ville
+          Dupont,Jean,0102030405,10 rue de la Paix,Paris
+          Martin,Sophie,0607080910,25 avenue Foch,Lyon
+          Durand,Paul,0405060708,5 boulevard Victor Hugo,Marseille
+          --- FIN CSV ---
+          
+          Si le client n'est pas dans cette liste, dis que tu ne trouves pas le dossier. 
+          Si la recherche dans l'annuaire est infructueuse, indique lui que tu ne trouves pas la réponse puis demande au client s'il a besoin d'autre chose, s'il n'a pas besoin d'autre chose, termine l'appel poliment en le remerciant puis en lui disant au revoir.
+          Si le numéro de téléphone est trouvé, donne le chiffre par chiffre puis demande au client s'il a besoin d'autre chose, s'il n'a pas besoin d'autre chose, termine l'appel poliment en le remerciant puis en lui disant au revoir.
+          Si le nom ou l'adresse est trouvé, donne les informations au client et demande lui s'il a besoin d'autre chose, s'il n'a pas besoin d'autre chose, termine l'appel poliment en le remerciant puis en lui disant au revoir.
+    # La section volumes reste disponible si vous voulez utiliser des outils personnalisés
+    # volumes:
+    #   - ./tools:/usr/src/app/tools
+    networks:
+      - avr
+  # --- FIN DE LA SECTION MODIFIÉE ---
+
+  avr-asterisk:
+    image: agentvoiceresponse/avr-asterisk
+    platform: linux/x86_64
+    container_name: avr-asterisk
+    restart: always
+    ports:
+      - 5038:5038
+      - 5060:5060
+      - 8088:8088
+      - 10000-10050:10000-10050/udp
+    volumes:
+      - ./asterisk/conf/manager.conf:/etc/asterisk/my_manager.conf
+      - ./asterisk/conf/pjsip.conf:/etc/asterisk/my_pjsip.conf
+      - ./asterisk/conf/extensions.conf:/etc/asterisk/my_extensions.conf
+      - ./asterisk/conf/queues.conf:/etc/asterisk/my_queues.conf
+      - ./asterisk/conf/ari.conf:/etc/asterisk/my_ari.conf
+    networks:
+      - avr
+
+  avr-ami:
+    # image: agentvoiceresponse/avr-ami
+    image: avr-ami:latest
+    platform: linux/x86_64
+    container_name: avr-ami
+    restart: always
+    environment:
+      - PORT=6006
+      - AMI_HOST=${AMI_HOST:-avr-asterisk}
+      - AMI_PORT=${AMI_PORT:-5038}
+      - AMI_USERNAME=${AMI_USERNAME:-avr}
+      - AMI_PASSWORD=${AMI_PASSWORD:-avr}
+    ports:
+      - 6006:6006
+    networks:
+      - avr
+
+networks:
+  avr:
+    name: avr
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/24
