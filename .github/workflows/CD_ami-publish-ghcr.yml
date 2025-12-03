@@ -60,6 +60,10 @@ jobs:
           file: ./avr-ami.dockerfile
           push: true
           platforms: linux/amd64
+          # On ajoute le label pour faire le lien avec le repo (OBLIGATOIRE si le nom change)
+          labels: |
+            org.opencontainers.image.source=${{ github.event.repository.html_url }}
+          # On change le nom de l'image (ajout de -ami à la fin)
           tags: |
-            ghcr.io/${{ github.repository }}:latest
-            ghcr.io/${{ github.repository }}:${{ steps.vars.outputs.tag }}
+            ghcr.io/${{ github.repository }}-ami:latest
+            ghcr.io/${{ github.repository }}-ami:${{ steps.vars.outputs.tag }}
