@@ -57,7 +57,7 @@ jobs:
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: ./avr-api.dockerfile
+          file: ./avr-ami.dockerfile
           push: true
           platforms: linux/amd64
           tags: |
