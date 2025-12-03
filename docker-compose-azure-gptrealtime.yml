@@ -57,6 +57,7 @@ services:
           3. N'invente jamais de réponse. Si l'outil ne trouve rien, dis que tu ne trouves pas et demande à l'utilisteur d'épeler le nom ou de répéter le numéro de téléphone chiffre par chiffre.
           4. Ne donne jamais plus de 10 numéros de téléphones ou contacts à la fois.
           5. Sois toujours poli et concis.
+          6. Quand tu prononces un numéro de téléphone, prononce le toujours chiffre par chiffre (exemple : 0 1 0 2 0 3 0 4 0 5).
 
           PROCESSUS :
           - Si l'utilisateur donne un nom : Demande la ville si nécessaire pour affiner, puis appelle `search_contact`.

@@ -4,162 +4,204 @@ const { parse } = require("csv-parse/sync");
 const Fuse = require("fuse.js");
 const natural = require("natural");
 
-// On utilise DoubleMetaphone, très efficace pour les noms propres (gère bien Dupont/Dupond, Faivre/Fèvre)
-const metaphone = natural.DoubleMetaphone;
+// CORRECTION ICI : On utilise Metaphone standard (plus stable que DoubleMetaphone)
+const metaphone = natural.Metaphone;
 
 let phoneBook = [];
 let fuseIndex = null;
 
+// Normalisation simple
 const normalize = (str) => {
-  if (!str) return "";
+  if (!str || typeof str !== 'string') return "";
   return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 };
 
-// Fonction pour obtenir le code phonétique d'une chaine
-// Ex: "Faivre" -> "FFR", "Fèvre" -> "FFR"
+// Récupération phonétique SÉCURISÉE
 const getPhonetics = (str) => {
-    if (!str) return "";
-    const clean = normalize(str);
-    // process renvoie un tableau [primary, secondary]. On prend le primary.
-    return metaphone.process(clean)[0]; 
+    try {
+        if (!str) return "";
+        const clean = normalize(str);
+        if (!clean) return "";
+        
+        if (metaphone && typeof metaphone.process === 'function') {
+            return metaphone.process(clean) || "";
+        } else {
+            return clean;
+        }
+    } catch (e) {
+        console.error("Erreur phonétique sur:", str, e.message);
+        return "";
+    }
 };
 
 try {
   const csvPath = path.join(__dirname, "../data/annuaire.csv");
+  console.log(`[Annuaire] Chargement depuis : ${csvPath}`);
   
   if (fs.existsSync(csvPath)) {
     const fileContent = fs.readFileSync(csvPath, "utf-8");
     
+    // 1. Parsing CSV
     const rawData = parse(fileContent, {
       columns: true,
       skip_empty_lines: true,
       trim: true,
-      delimiter: [',', ';', '\t'],
-      relax_quotes: true
+      delimiter: [';', ',', '\t'],
+      relax_quotes: true,
+      relax_column_count: true 
     });
 
-    // PRÉPARATION DES DONNÉES AVEC PHONÉTIQUE
-    phoneBook = rawData.map(entry => {
-        const nom = entry.nom || entry.Nom || "";
-        const prenom = entry.prenom || entry.Prenom || "";
+    // 2. Mappage des données
+    phoneBook = rawData.map((entry) => {
+        const keys = Object.keys(entry);
         
+        const findVal = (patterns) => {
+            const key = keys.find(k => patterns.includes(normalize(k)));
+            return key ? entry[key] : "";
+        };
+
+        const nom = findVal(["nom", "name", "lastname"]) || "";
+        const prenom = findVal(["prenom", "firstname"]) || "";
+        const tel = findVal(["telephone", "phone", "tel", "mobile", "fixe"]) || "";
+        const adresse = findVal(["adresse", "address", "rue"]) || "";
+        const ville = findVal(["ville", "city", "commune"]) || "";
+
         return {
-            ...entry,
-            // 1. Textuel complet
-            _fullName: `${prenom} ${nom}`,
-            _reverseName: `${nom} ${prenom}`,
+            original: entry,
+            nom: nom,
+            prenom: prenom,
+            telephone: tel,
+            adresse: adresse,
+            ville: ville,
             
-            // 2. Phonétique (C'est ici que la magie opère pour Faivre/Fèvre)
-            _phonoNom: getPhonetics(nom),       // Faivre -> FFR
-            _phonoPrenom: getPhonetics(prenom), // Jean -> JN
-            _phonoFull: getPhonetics(prenom + nom) // JeanFaivre -> JNFFR
+            // Champs calculés pour la recherche
+            _fullName: `${prenom} ${nom}`,
+            _phonoFull: getPhonetics(prenom + nom),
+            _phonoNom: getPhonetics(nom)
         };
     });
     
-    console.log(`[Annuaire] ${phoneBook.length} entrées chargées et phonétisées.`);
+    console.log(`[Annuaire] ${phoneBook.length} entrées chargées.`);
+    
+    // DEBUG : Vérification
+    if (phoneBook.length > 0) {
+        console.log("------------------------------------------------");
+        console.log("[Annuaire] TEST LIGNE 1 :", JSON.stringify(phoneBook[0], null, 2));
+        console.log("[Annuaire] TEST PHONETIQUE 'Simon' :", getPhonetics("Simon"));
+        console.log("------------------------------------------------");
+    }
 
+    // 3. Configuration Fuse.js
     if (phoneBook.length > 0) {
         const options = {
             includeScore: true,
-            // On cherche maintenant dans le texte ET dans la phonétique
             keys: [
-                { name: '_fullName', weight: 1.0 },    // Match exact texte (priorité max)
-                { name: '_phonoFull', weight: 0.7 },   // Match phonétique combiné (Faivre/Fèvre)
+                { name: '_fullName', weight: 1.0 },
+                { name: '_phonoFull', weight: 0.8 },
                 { name: 'nom', weight: 0.6 },
-                { name: '_phonoNom', weight: 0.5 },    // Phonétique nom seul
-                { name: 'telephone', weight: 0.9 }
+                { name: '_phonoNom', weight: 0.5 },
+                { name: 'telephone', weight: 1.0 }
             ],
-            threshold: 0.35, // Un peu plus strict car la phonétique aide déjà beaucoup
+            threshold: 0.4, 
             distance: 100,
             ignoreLocation: true
         };
-        
         fuseIndex = new Fuse(phoneBook, options);
     }
 
   } else {
-    console.warn(`[Annuaire] Fichier CSV introuvable: ${csvPath}`);
+    console.warn(`[Annuaire] ERREUR : Fichier CSV introuvable à ${csvPath}`);
   }
 } catch (err) {
-  console.error("[Annuaire] Erreur de chargement:", err.message);
+  console.error("[Annuaire] CRASH au chargement:", err);
 }
 
 module.exports = {
   name: "search_contact",
-  description: "Recherche un client. Efficace même avec des fautes ou une prononciation approximative (ex: Fèvre pour Faivre).",
+  description: "Recherche un contact dans l'annuaire (Nom, Prénom ou Téléphone).",
   input_schema: {
     type: "object",
     properties: {
-      query: {
-        type: "string",
-        description: "Nom, Prénom ou Téléphone."
-      },
-      city: {
-        type: "string",
-        description: "Ville (optionnel)."
-      }
+      query: { type: "string", description: "Nom/Prénom ou Numéro." },
+      city: { type: "string", description: "Ville (optionnel)." }
     },
     required: ["query"],
   },
   handler: async (uuid, { query, city }) => {
-    // Si c'est un numéro, on ne fait pas de phonétique
-    const isPhoneSearch = /^[0-9\s\.\-\+]+$/.test(query);
-    
-    console.log(`[Tool: Search] Recherche: "${query}" (PhoneMode: ${isPhoneSearch})`);
+    try {
+        console.log(`[Tool: Search] Requête reçue: "${query}" (Ville: ${city})`);
 
-    if (!phoneBook.length || !fuseIndex) return "Erreur : Annuaire vide.";
+        if (!phoneBook.length || !fuseIndex) {
+             return "Erreur technique: Annuaire vide.";
+        }
 
-    let results = [];
+        const isPhoneSearch = /^[0-9\s\.\-\+]+$/.test(query);
+        let results = [];
 
-    if (isPhoneSearch) {
-        const cleanNum = query.replace(/[^0-9]/g, '');
-        results = phoneBook.filter(entry => {
-            const entryNum = (entry.telephone || entry.Telephone || "").replace(/[^0-9]/g, '');
-            return entryNum.includes(cleanNum);
-        }).map(item => ({ item, score: 0 })); 
-    } else {
-        // Pour la recherche texte, on cherche :
-        // 1. Le texte brut ("Fèvre")
-        // 2. OU sa phonétique ("FFR")
-        // Fuse.js va gérer ça automatiquement grâce aux clés définies plus haut
+        if (isPhoneSearch) {
+            // Recherche par numéro
+            const cleanNum = query.replace(/[^0-9]/g, '');
+            results = phoneBook.filter(entry => {
+                const entryNum = (entry.telephone || "").replace(/[^0-9]/g, '');
+                return entryNum.includes(cleanNum);
+            }).map(item => ({ item, score: 0 })); 
+        } else {
+            // Recherche par Nom (Texte + Phonétique)
+            const queryPhonetic = getPhonetics(query);
+            
+            results = fuseIndex.search({
+                $or: [
+                    { _fullName: query },
+                    { _phonoFull: queryPhonetic },
+                    { _phonoNom: queryPhonetic }
+                ]
+            });
+        }
+
+        // Filtrage Ville
+        if (city && results.length > 0) {
+            const normalizedCitySearch = normalize(city);
+            results = results.filter(res => {
+                const entryCity = normalize(res.item.ville);
+                return entryCity.includes(normalizedCitySearch);
+            });
+        }
+
+        // --- AJOUT DE LA FONCTION DE FORMATAGE ---
+        // Force le format "XX XX XX" pour que l'IA ne se trompe pas en lisant
+        const formatPhoneNC = (rawNum) => {
+            if (!rawNum) return "Non renseigné";
+            const digits = rawNum.replace(/[^0-9]/g, '');
+            
+            // Si c'est un numéro à 6 chiffres (standard NC)
+            if (digits.length === 6) {
+                // Découpe en morceaux de 2 et rejoint par un espace
+                return digits.match(/.{1,2}/g).join(" ");
+            }
+            return digits;
+        };
+        // -----------------------------------------
+
+        const limitedResults = results.slice(0, 5).map(res => ({
+            nom: res.item.nom,
+            prenom: res.item.prenom,
+            // Application du formatage ici
+            telephone: formatPhoneNC(res.item.telephone), 
+            adresse: res.item.adresse,
+            ville: res.item.ville
+        }));
+
+        console.log(`[Tool: Search] ${limitedResults.length} résultats trouvés.`);
         
-        // Petite astuce : on peut injecter la phonétique dans la requête Fuse
-        // Mais ici, on laisse Fuse faire le lien entre "Fèvre" (input) et "_phonoFull" (index) ? 
-        // Non, Fuse compare chaine vs chaine.
-        // Donc si l'user tape "Fèvre", on doit aussi chercher le code phonétique de "Fèvre".
-        
-        const queryPhonetic = getPhonetics(query); // Fèvre -> FFR
-        
-        // On lance une recherche OR (Texte OU Phonétique)
-        results = fuseIndex.search({
-            $or: [
-                { _fullName: query },      // Cherche "Fèvre" dans les noms écrits
-                { _phonoFull: queryPhonetic }, // Cherche "FFR" dans les codes phonétiques
-                { _phonoNom: queryPhonetic }   // Cherche "FFR" dans les noms de famille
-            ]
-        });
+        if (limitedResults.length === 0) {
+            return "Aucun résultat trouvé dans l'annuaire.";
+        }
+
+        return JSON.stringify(limitedResults);
+
+    } catch (error) {
+        console.error("[Tool: Search] CRASH PENDANT LA RECHERCHE :", error);
+        return "Erreur technique lors de la recherche.";
     }
-
-    if (city) {
-        const normalizedCitySearch = normalize(city);
-        results = results.filter(res => {
-            const entryCity = normalize(res.item.ville || res.item.Ville || "");
-            return entryCity.includes(normalizedCitySearch);
-        });
-    }
-
-    const limitedResults = results.slice(0, 5).map(res => {
-        // On retire les champs techniques (_phono...)
-        const { _fullName, _reverseName, _phonoNom, _phonoPrenom, _phonoFull, ...cleanItem } = res.item;
-        return cleanItem;
-    });
-
-    console.log(`[Tool: Search] ${limitedResults.length} résultats renvoyés.`);
-
-    if (limitedResults.length === 0) {
-        return "Aucun résultat trouvé.";
-    }
-
-    return JSON.stringify(limitedResults);
   },
 };
