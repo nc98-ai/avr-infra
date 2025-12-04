@@ -74,9 +74,16 @@ try {
             adresse: adresse,
             ville: ville,
             
-            // Champs calculés pour la recherche
+            // --- MODIFICATION 1 : AJOUT DU SENS INVERSE (NOM + PRENOM) ---
+            // Sens normal
             _fullName: `${prenom} ${nom}`,
             _phonoFull: getPhonetics(prenom + nom),
+            
+            // Sens inversé (Vital si le client dit "Faivre Jean")
+            _reverseName: `${nom} ${prenom}`,
+            _phonoReverse: getPhonetics(nom + prenom),
+            
+            // Nom seul (utile pour le filtrage large)
             _phonoNom: getPhonetics(nom)
         };
     });
@@ -95,9 +102,12 @@ try {
     if (phoneBook.length > 0) {
         const options = {
             includeScore: true,
+            // --- MODIFICATION 2 : ON INDEXE LES CHAMPS INVERSES ---
             keys: [
-                { name: '_fullName', weight: 1.0 },
-                { name: '_phonoFull', weight: 0.8 },
+                { name: '_fullName', weight: 1.0 },      // Jean Dupont
+                { name: '_reverseName', weight: 1.0 },   // Dupont Jean
+                { name: '_phonoFull', weight: 0.8 },     // Phonétique JeanDupont
+                { name: '_phonoReverse', weight: 0.8 },  // Phonétique DupontJean
                 { name: 'nom', weight: 0.6 },
                 { name: '_phonoNom', weight: 0.5 },
                 { name: 'telephone', weight: 1.0 }
@@ -149,25 +159,49 @@ module.exports = {
             // Recherche par Nom (Texte + Phonétique)
             const queryPhonetic = getPhonetics(query);
             
+            // --- MODIFICATION 3 : RECHERCHE DANS LES DEUX SENS ---
             results = fuseIndex.search({
                 $or: [
-                    { _fullName: query },
-                    { _phonoFull: queryPhonetic },
-                    { _phonoNom: queryPhonetic }
+                    { _fullName: query },              // Cherche "Jean Dupont"
+                    { _reverseName: query },           // Cherche "Dupont Jean"
+                    { _phonoFull: queryPhonetic },     // Phonétique Ordre 1
+                    { _phonoReverse: queryPhonetic },  // Phonétique Ordre 2
+                    { _phonoNom: queryPhonetic }       // Nom seul
                 ]
             });
         }
 
-        // Filtrage Ville
+        // --- NOUVEAU FILTRAGE INTELLIGENT ---
         if (city && results.length > 0) {
             const normalizedCitySearch = normalize(city);
-            results = results.filter(res => {
+            
+            // 1. On sépare ceux qui sont dans la bonne ville
+            const cityMatches = results.filter(res => {
                 const entryCity = normalize(res.item.ville);
                 return entryCity.includes(normalizedCitySearch);
             });
-        }
 
-        // --- AJOUT DE LA FONCTION DE FORMATAGE ---
+            // 2. Stratégie de décision :
+            // Si on a des résultats dans la bonne ville qui ont un BON score de nom (similitude forte)
+            // Note : Fuse score 0 = parfait, 1 = pas de match. 
+            // Un score < 0.3 signifie que le nom correspond vraiment bien.
+            const hasGoodMatchInCity = cityMatches.some(res => res.score < 0.3);
+
+            if (hasGoodMatchInCity) {
+                // CAS A : On a trouvé la personne exacte dans la bonne ville.
+                // On ne garde que ceux de la ville pour éviter la confusion.
+                console.log(`[Tool: Search] Match exact trouvé à ${city}. Filtrage strict appliqué.`);
+                results = cityMatches;
+            } else {
+                // CAS B : Les seuls gens dans la ville sont des homonymes éloignés (ex: Daniel UKEIWE vs Daniel PETIT)
+                // ALORS QUE le vrai match (Daniel PETIT) est dans une autre ville.
+                // -> On annule le filtre ville pour renvoyer le vrai nom (mauvaise ville).
+                console.log(`[Tool: Search] Pas de bon nom trouvé à ${city}. On renvoie les meilleurs noms globaux (mauvaise ville).`);
+                // On ne touche pas à 'results', on laisse Fuse renvoyer les meilleurs scores de nom.
+            }
+        }
+        // -------------------------------------
+
         // Force le format "XX XX XX" pour que l'IA ne se trompe pas en lisant
         const formatPhoneNC = (rawNum) => {
             if (!rawNum) return "Non renseigné";
@@ -180,7 +214,6 @@ module.exports = {
             }
             return digits;
         };
-        // -----------------------------------------
 
         const limitedResults = results.slice(0, 5).map(res => ({
             nom: res.item.nom,
