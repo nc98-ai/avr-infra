@@ -4,35 +4,51 @@ const { parse } = require("csv-parse/sync");
 const Fuse = require("fuse.js");
 const natural = require("natural");
 
-// CORRECTION ICI : On utilise Metaphone standard (plus stable que DoubleMetaphone)
+// On utilise Metaphone standard (plus robuste que DoubleMetaphone)
 const metaphone = natural.Metaphone;
 
 let phoneBook = [];
 let fuseIndex = null;
 
-// Normalisation simple
+// --- 1. FONCTIONS UTILITAIRES ---
+
+// Normalisation (minuscule, sans accent, trim)
 const normalize = (str) => {
   if (!str || typeof str !== 'string') return "";
   return str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 };
 
-// Récupération phonétique SÉCURISÉE
+// Phonétique Sécurisée
 const getPhonetics = (str) => {
     try {
         if (!str) return "";
         const clean = normalize(str);
         if (!clean) return "";
         
+        // Vérification que la librairie est bien chargée
         if (metaphone && typeof metaphone.process === 'function') {
             return metaphone.process(clean) || "";
         } else {
-            return clean;
+            return clean; // Fallback texte si erreur
         }
     } catch (e) {
         console.error("Erreur phonétique sur:", str, e.message);
         return "";
     }
 };
+
+// Formatage Numéro Calédonien (XX XX XX)
+const formatPhoneNC = (rawNum) => {
+    if (!rawNum) return "Non renseigné";
+    const digits = rawNum.replace(/[^0-9]/g, '');
+    // Standard NC : 6 chiffres
+    if (digits.length === 6) {
+        return digits.match(/.{1,2}/g).join(" ");
+    }
+    return digits;
+};
+
+// --- 2. CHARGEMENT ET INDEXATION ---
 
 try {
   const csvPath = path.join(__dirname, "../data/annuaire.csv");
@@ -41,7 +57,7 @@ try {
   if (fs.existsSync(csvPath)) {
     const fileContent = fs.readFileSync(csvPath, "utf-8");
     
-    // 1. Parsing CSV
+    // Parsing CSV (supporte ; , et tab)
     const rawData = parse(fileContent, {
       columns: true,
       skip_empty_lines: true,
@@ -51,10 +67,11 @@ try {
       relax_column_count: true 
     });
 
-    // 2. Mappage des données
+    // Mappage des données + Création des champs de recherche
     phoneBook = rawData.map((entry) => {
         const keys = Object.keys(entry);
         
+        // Helper pour trouver une colonne peu importe la casse (Nom/nom/NOM)
         const findVal = (patterns) => {
             const key = keys.find(k => patterns.includes(normalize(k)));
             return key ? entry[key] : "";
@@ -67,52 +84,47 @@ try {
         const ville = findVal(["ville", "city", "commune"]) || "";
 
         return {
-            original: entry,
+            // Données brutes pour l'affichage
             nom: nom,
             prenom: prenom,
             telephone: tel,
             adresse: adresse,
             ville: ville,
             
-            // --- MODIFICATION 1 : AJOUT DU SENS INVERSE (NOM + PRENOM) ---
-            // Sens normal
+            // --- CHAMPS DE RECHERCHE (TEXTE + PHONÉTIQUE) ---
+            
+            // 1. Sens Normal : "Adrien Ali"
             _fullName: `${prenom} ${nom}`,
             _phonoFull: getPhonetics(prenom + nom),
             
-            // Sens inversé (Vital si le client dit "Faivre Jean")
+            // 2. Sens Inversé : "Ali Adrien" (Vital si le client inverse)
             _reverseName: `${nom} ${prenom}`,
             _phonoReverse: getPhonetics(nom + prenom),
             
-            // Nom seul (utile pour le filtrage large)
-            _phonoNom: getPhonetics(nom)
+            // 3. Nom de famille seul (Filet de sécurité)
+            _phonoNom: getPhonetics(nom),
+
+            // 4. Phonétique de la ville (Numea / Nouméa)
+            _phonoVille: getPhonetics(ville)
         };
     });
     
     console.log(`[Annuaire] ${phoneBook.length} entrées chargées.`);
     
-    // DEBUG : Vérification
-    if (phoneBook.length > 0) {
-        console.log("------------------------------------------------");
-        console.log("[Annuaire] TEST LIGNE 1 :", JSON.stringify(phoneBook[0], null, 2));
-        console.log("[Annuaire] TEST PHONETIQUE 'Simon' :", getPhonetics("Simon"));
-        console.log("------------------------------------------------");
-    }
-
-    // 3. Configuration Fuse.js
+    // Configuration Fuse.js (Moteur de recherche floue)
     if (phoneBook.length > 0) {
         const options = {
-            includeScore: true,
-            // --- MODIFICATION 2 : ON INDEXE LES CHAMPS INVERSES ---
+            includeScore: true, // Important pour le filtrage intelligent
             keys: [
-                { name: '_fullName', weight: 1.0 },      // Jean Dupont
-                { name: '_reverseName', weight: 1.0 },   // Dupont Jean
-                { name: '_phonoFull', weight: 0.8 },     // Phonétique JeanDupont
-                { name: '_phonoReverse', weight: 0.8 },  // Phonétique DupontJean
+                { name: '_fullName', weight: 1.0 },
+                { name: '_reverseName', weight: 1.0 },
+                { name: '_phonoFull', weight: 0.8 },
+                { name: '_phonoReverse', weight: 0.8 },
                 { name: 'nom', weight: 0.6 },
                 { name: '_phonoNom', weight: 0.5 },
                 { name: 'telephone', weight: 1.0 }
             ],
-            threshold: 0.4, 
+            threshold: 0.4, // Tolérance aux fautes (0.0 = strict, 1.0 = tout)
             distance: 100,
             ignoreLocation: true
         };
@@ -125,6 +137,8 @@ try {
 } catch (err) {
   console.error("[Annuaire] CRASH au chargement:", err);
 }
+
+// --- 3. DÉFINITION DE L'OUTIL ---
 
 module.exports = {
   name: "search_contact",
@@ -139,92 +153,95 @@ module.exports = {
   },
   handler: async (uuid, { query, city }) => {
     try {
-        console.log(`[Tool: Search] Requête reçue: "${query}" (Ville: ${city})`);
+        console.log(`[Tool: Search] Requête reçue: "${query}" (Ville: ${city || "Non spécifiée"})`);
 
         if (!phoneBook.length || !fuseIndex) {
              return "Erreur technique: Annuaire vide.";
         }
 
+        // Est-ce une recherche par numéro ?
         const isPhoneSearch = /^[0-9\s\.\-\+]+$/.test(query);
         let results = [];
 
         if (isPhoneSearch) {
-            // Recherche par numéro
+            // --- A. RECHERCHE PAR TÉLÉPHONE ---
             const cleanNum = query.replace(/[^0-9]/g, '');
             results = phoneBook.filter(entry => {
                 const entryNum = (entry.telephone || "").replace(/[^0-9]/g, '');
                 return entryNum.includes(cleanNum);
             }).map(item => ({ item, score: 0 })); 
+
         } else {
-            // Recherche par Nom (Texte + Phonétique)
+            // --- B. RECHERCHE PAR NOM (PUISSANTE) ---
             const queryPhonetic = getPhonetics(query);
             
-            // --- MODIFICATION 3 : RECHERCHE DANS LES DEUX SENS ---
+            // On cherche partout : Texte normal, Texte inversé, Phonétique normale, Phonétique inversée
             results = fuseIndex.search({
                 $or: [
-                    { _fullName: query },              // Cherche "Jean Dupont"
-                    { _reverseName: query },           // Cherche "Dupont Jean"
-                    { _phonoFull: queryPhonetic },     // Phonétique Ordre 1
-                    { _phonoReverse: queryPhonetic },  // Phonétique Ordre 2
-                    { _phonoNom: queryPhonetic }       // Nom seul
+                    { _fullName: query },
+                    { _reverseName: query },
+                    { _phonoFull: queryPhonetic },
+                    { _phonoReverse: queryPhonetic },
+                    { _phonoNom: queryPhonetic }
                 ]
             });
         }
 
-        // --- NOUVEAU FILTRAGE INTELLIGENT ---
+        // --- C. FILTRAGE VILLE INTELLIGENT ---
+        // C'est ici qu'on gère le cas "Daniel PETIT à Pouembout (alors qu'il est à Dumbéa)"
+        
         if (city && results.length > 0) {
             const normalizedCitySearch = normalize(city);
+            const phoneticCitySearch = getPhonetics(city);
             
-            // 1. On sépare ceux qui sont dans la bonne ville
+            // Étape 1 : On isole les résultats qui correspondent à la ville (Texte OU Phonétique)
             const cityMatches = results.filter(res => {
                 const entryCity = normalize(res.item.ville);
-                return entryCity.includes(normalizedCitySearch);
+                const entryCityPhono = res.item._phonoVille; // Champ calculé au chargement
+                
+                // Comparaison Texte
+                const textMatch = entryCity.includes(normalizedCitySearch);
+                // Comparaison Phonétique
+                const phonoMatch = entryCityPhono && phoneticCitySearch && 
+                                   entryCityPhono.includes(phoneticCitySearch);
+
+                return textMatch || phonoMatch;
             });
 
-            // 2. Stratégie de décision :
-            // Si on a des résultats dans la bonne ville qui ont un BON score de nom (similitude forte)
-            // Note : Fuse score 0 = parfait, 1 = pas de match. 
-            // Un score < 0.3 signifie que le nom correspond vraiment bien.
-            const hasGoodMatchInCity = cityMatches.some(res => res.score < 0.3);
+            // Étape 2 : Analyse de pertinence (Smart Check)
+            // On regarde si, parmi les gens de la bonne ville, il y a un "vrai" match de nom.
+            // Score Fuse : proche de 0 = très bon match. > 0.4 = mauvais match.
+            // Si on trouve un score < 0.3 dans la ville, c'est sûrement la bonne personne.
+            const hasStrongMatchInCity = cityMatches.some(res => res.score < 0.35);
 
-            if (hasGoodMatchInCity) {
-                // CAS A : On a trouvé la personne exacte dans la bonne ville.
-                // On ne garde que ceux de la ville pour éviter la confusion.
-                console.log(`[Tool: Search] Match exact trouvé à ${city}. Filtrage strict appliqué.`);
+            if (hasStrongMatchInCity) {
+                // CAS 1 : On a trouvé "Daniel UKEIWE" (Bon Nom, Bonne Ville). 
+                // Ou "Daniel PETIT" (Bon Nom, Bonne Ville).
+                console.log(`[Tool: Search] Match confirmé à ${city}. Filtrage appliqué.`);
                 results = cityMatches;
             } else {
-                // CAS B : Les seuls gens dans la ville sont des homonymes éloignés (ex: Daniel UKEIWE vs Daniel PETIT)
-                // ALORS QUE le vrai match (Daniel PETIT) est dans une autre ville.
-                // -> On annule le filtre ville pour renvoyer le vrai nom (mauvaise ville).
-                console.log(`[Tool: Search] Pas de bon nom trouvé à ${city}. On renvoie les meilleurs noms globaux (mauvaise ville).`);
-                // On ne touche pas à 'results', on laisse Fuse renvoyer les meilleurs scores de nom.
+                // CAS 2 : On n'a que des résultats médiocres dans la ville (ex: Daniel UKEIWE score 0.5)
+                // alors qu'on a un résultat excellent ailleurs (Daniel PETIT score 0.01).
+                // -> On décide d'IGNORER le filtre ville pour montrer le vrai Daniel PETIT.
+                console.log(`[Tool: Search] Pas de match convaincant à ${city}. On renvoie les meilleurs résultats globaux.`);
+                // On ne modifie pas 'results', on garde le top global.
             }
         }
-        // -------------------------------------
 
-        // Force le format "XX XX XX" pour que l'IA ne se trompe pas en lisant
-        const formatPhoneNC = (rawNum) => {
-            if (!rawNum) return "Non renseigné";
-            const digits = rawNum.replace(/[^0-9]/g, '');
-            
-            // Si c'est un numéro à 6 chiffres (standard NC)
-            if (digits.length === 6) {
-                // Découpe en morceaux de 2 et rejoint par un espace
-                return digits.match(/.{1,2}/g).join(" ");
-            }
-            return digits;
-        };
-
+        // --- D. FORMATAGE ET RETOUR ---
+        
         const limitedResults = results.slice(0, 5).map(res => ({
             nom: res.item.nom,
             prenom: res.item.prenom,
-            // Application du formatage ici
+            // Formatage vital pour l'IA (66 19 18)
             telephone: formatPhoneNC(res.item.telephone), 
             adresse: res.item.adresse,
-            ville: res.item.ville
+            ville: res.item.ville,
+            // (Optionnel) On renvoie le score de pertinence pour debug dans les logs IA si besoin
+            // pertinence: (1 - res.score).toFixed(2) 
         }));
 
-        console.log(`[Tool: Search] ${limitedResults.length} résultats trouvés.`);
+        console.log(`[Tool: Search] ${limitedResults.length} résultats renvoyés.`);
         
         if (limitedResults.length === 0) {
             return "Aucun résultat trouvé dans l'annuaire.";
