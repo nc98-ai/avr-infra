@@ -25,3 +25,4 @@ tools
 model
 n8n
 data/*
+*.wav
