@@ -5,6 +5,7 @@ services:
     container_name: avr-core
     restart: always
     environment:
+      - TZ=Pacific/Noumea  # <--- AJOUTEZ CETTE LIGNE
       - PORT=5001 
       # MODIFICATION CRITIQUE : Faire pointer le core vers le nouveau service Azure STS
       - STS_URL=ws://avr-sts-azureopenai:6030
@@ -22,8 +23,9 @@ services:
     restart: always
     ports:
       - "6030:6030"
+    
     environment:
-
+        TZ: Pacific/Noumea  # <--- AJOUTEZ CETTE LIGNE
         # --- Paramètres spécifiques ---
         AZURE_OPENAI_ENDPOINT: ${AZURE_OPENAI_ENDPOINT}
         AZURE_OPENAI_API_KEY: ${AZURE_OPENAI_API_KEY}
@@ -67,6 +69,8 @@ services:
     platform: linux/x86_64
     container_name: avr-asterisk
     restart: always
+    environment:
+      - TZ=Pacific/Noumea  # <--- AJOUTEZ CETTE LIGNE    
     ports:
       - 5038:5038
       - 5060:5060
@@ -89,7 +93,9 @@ services:
     platform: linux/x86_64
     container_name: avr-ami
     restart: always
+    
     environment:
+      - TZ=Pacific/Noumea  # <--- AJOUTEZ CETTE LIGNE    
       - PORT=6006
       - AMI_HOST=${AMI_HOST:-avr-asterisk}
       - AMI_PORT=${AMI_PORT:-5038}
