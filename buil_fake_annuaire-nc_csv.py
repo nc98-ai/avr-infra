@@ -3,7 +3,7 @@ import random
 
 # Configuration
 FILENAME = "annuaire_nc.csv"
-NB_LIGNES = 20000
+NB_LIGNES = 200000
 
 # Données contextuelles (Nouvelle-Calédonie)
 # Mélange de noms d'origines diverses présentes en NC (Kanak, Européen, Océanien, Asiatique)

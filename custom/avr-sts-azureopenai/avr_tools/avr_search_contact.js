@@ -21,14 +21,12 @@ const getPhonetics = (str) => {
         if (!str) return "";
         const clean = normalize(str);
         if (!clean) return "";
-        
         if (metaphone && typeof metaphone.process === 'function') {
             return metaphone.process(clean) || "";
         } else {
             return clean;
         }
     } catch (e) {
-        console.error("Erreur phonétique sur:", str, e.message);
         return "";
     }
 };
@@ -42,11 +40,24 @@ const formatPhoneNC = (rawNum) => {
     return digits;
 };
 
-// NOUVEAU : Fonction pour préparer l'épellation (ex: "Paul" -> "P-A-U-L")
 const formatSpelling = (str) => {
     if (!str) return "";
-    // On nettoie les espaces inutiles, on met en majuscule, et on sépare par des tirets
     return str.trim().toUpperCase().split("").join("-");
+};
+
+// Convertisseur Mots -> Chiffres
+const convertTextToDigits = (text) => {
+    if (!text) return "";
+    const map = {
+        'zero': '0', 'zéro': '0', 'un': '1', 'une': '1', 'deux': '2', 'trois': '3',
+        'quatre': '4', 'cinq': '5', 'six': '6', 'sept': '7', 'huit': '8', 'neuf': '9'
+    };
+    let cleanText = text.toLowerCase();
+    for (const [word, digit] of Object.entries(map)) {
+        const regex = new RegExp(`\\b${word}\\b`, 'g');
+        cleanText = cleanText.replace(regex, digit);
+    }
+    return cleanText;
 };
 
 // --- 2. CHARGEMENT ET INDEXATION ---
@@ -57,19 +68,13 @@ try {
   
   if (fs.existsSync(csvPath)) {
     const fileContent = fs.readFileSync(csvPath, "utf-8");
-    
     const rawData = parse(fileContent, {
-      columns: true,
-      skip_empty_lines: true,
-      trim: true,
-      delimiter: [';', ',', '\t'],
-      relax_quotes: true,
-      relax_column_count: true 
+      columns: true, skip_empty_lines: true, trim: true,
+      delimiter: [';', ',', '\t'], relax_quotes: true, relax_column_count: true 
     });
 
     phoneBook = rawData.map((entry) => {
         const keys = Object.keys(entry);
-        
         const findVal = (patterns) => {
             const key = keys.find(k => patterns.includes(normalize(k)));
             return key ? entry[key] : "";
@@ -80,28 +85,32 @@ try {
         const tel = findVal(["telephone", "phone", "tel", "mobile", "fixe"]) || "";
         const adresse = findVal(["adresse", "address", "rue"]) || "";
         const ville = findVal(["ville", "city", "commune"]) || "";
+        
+        // --- NOUVEAU : Récupération du Type de téléphone ---
+        // On cherche "type_telephone", "techno", "type", etc.
+        const typeTel = findVal(["type_telephone", "typetelephone", "type", "techno"]) || "Non spécifié";
 
         return {
-            nom: nom,
-            prenom: prenom,
-            telephone: tel,
-            adresse: adresse,
-            ville: ville,
+            nom, prenom, telephone: tel, adresse, ville, typeTel, // On stocke le type
             
-            // Champs de recherche
             _fullName: `${prenom} ${nom}`,
-            _phonoFull: getPhonetics(prenom + nom),
             _reverseName: `${nom} ${prenom}`,
+            _phonoFull: getPhonetics(prenom + nom),
             _phonoReverse: getPhonetics(nom + prenom),
             _phonoNom: getPhonetics(nom),
             _phonoVille: getPhonetics(ville)
         };
     });
     
-    console.log(`[Annuaire] ${phoneBook.length} entrées chargées.`);
-    
+    // DEBUG : Vérification que la colonne est bien lue
     if (phoneBook.length > 0) {
-        const options = {
+        console.log("------------------------------------------------");
+        console.log("[Annuaire] TEST LIGNE 1 :", JSON.stringify(phoneBook[0], null, 2));
+        console.log("------------------------------------------------");
+    }
+
+    if (phoneBook.length > 0) {
+        fuseIndex = new Fuse(phoneBook, {
             includeScore: true, 
             keys: [
                 { name: '_fullName', weight: 1.0 },
@@ -112,25 +121,17 @@ try {
                 { name: '_phonoNom', weight: 0.5 },
                 { name: 'telephone', weight: 1.0 }
             ],
-            threshold: 0.4, 
-            distance: 100,
-            ignoreLocation: true
-        };
-        fuseIndex = new Fuse(phoneBook, options);
+            threshold: 0.4, distance: 100, ignoreLocation: true
+        });
     }
+  } else { console.warn(`[Annuaire] Erreur: Fichier introuvable.`); }
+} catch (err) { console.error("[Annuaire] Crash chargement:", err); }
 
-  } else {
-    console.warn(`[Annuaire] ERREUR : Fichier CSV introuvable à ${csvPath}`);
-  }
-} catch (err) {
-  console.error("[Annuaire] CRASH au chargement:", err);
-}
-
-// --- 3. DÉFINITION DE L'OUTIL ---
+// --- 3. HANDLER ---
 
 module.exports = {
   name: "search_contact",
-  description: "Recherche un contact dans l'annuaire (Nom, Prénom ou Téléphone).",
+  description: "Recherche un contact (Nom/Prénom/Tél). Retourne le nom, le numéro et le type (Mobile/Fixe).",
   input_schema: {
     type: "object",
     properties: {
@@ -141,25 +142,24 @@ module.exports = {
   },
   handler: async (uuid, { query, city }) => {
     try {
-        console.log(`[Tool: Search] Requête reçue: "${query}" (Ville: ${city || "Non spécifiée"})`);
+        console.log(`[Tool: Search] Requête brute: "${query}" (Ville: ${city || "Non spécifiée"})`);
 
-        if (!phoneBook.length || !fuseIndex) {
-             return "Erreur technique: Annuaire vide.";
-        }
+        if (!phoneBook.length || !fuseIndex) return "Erreur technique: Annuaire vide.";
 
-        const isPhoneSearch = /^[0-9\s\.\-\+]+$/.test(query);
+        const queryWithDigits = convertTextToDigits(query);
+        const digitsOnly = queryWithDigits.replace(/[^0-9]/g, '');
+        const isPhoneSearch = digitsOnly.length >= 3;
+        
         let results = [];
 
         if (isPhoneSearch) {
-            // A. TÉLÉPHONE
-            const cleanNum = query.replace(/[^0-9]/g, '');
+            console.log(`[Tool: Search] Mode TÉLÉPHONE (Chiffres: ${digitsOnly})`);
             results = phoneBook.filter(entry => {
                 const entryNum = (entry.telephone || "").replace(/[^0-9]/g, '');
-                return entryNum.includes(cleanNum);
+                return entryNum.includes(digitsOnly);
             }).map(item => ({ item, score: 0 })); 
-
         } else {
-            // B. NOM
+            console.log(`[Tool: Search] Mode NOM`);
             const queryPhonetic = getPhonetics(query);
             results = fuseIndex.search({
                 $or: [
@@ -172,62 +172,48 @@ module.exports = {
             });
         }
 
-        // C. FILTRAGE VILLE INTELLIGENT (ASSOUPLI)
         if (city && results.length > 0) {
             const normalizedCitySearch = normalize(city);
             const phoneticCitySearch = getPhonetics(city);
-            
             const cityMatches = results.filter(res => {
                 const entryCity = normalize(res.item.ville);
                 const entryCityPhono = res.item._phonoVille;
-                const textMatch = entryCity.includes(normalizedCitySearch);
-                const phonoMatch = entryCityPhono && phoneticCitySearch && 
-                                   entryCityPhono.includes(phoneticCitySearch);
-                return textMatch || phonoMatch;
+                return entryCity.includes(normalizedCitySearch) || 
+                       (entryCityPhono && phoneticCitySearch && entryCityPhono.includes(phoneticCitySearch));
             });
-
-            const hasStrongMatchInCity = cityMatches.some(res => res.score < 0.5);
-
-            if (hasStrongMatchInCity) {
-                console.log(`[Tool: Search] Match confirmé à ${city}. Filtrage appliqué.`);
-                results = cityMatches;
-            } else {
-                console.log(`[Tool: Search] Pas de match convaincant à ${city}. On renvoie les meilleurs résultats globaux.`);
-            }
+            if (cityMatches.length > 0) results = cityMatches;
         }
 
-        // D. NETTOYAGE DYNAMIQUE RELATIF (GAP STRATEGY)
-        if (results.length > 0) {
-            const bestScore = results[0].score;
-            const toleranceGap = 0.25; 
-            const cutoff = bestScore + toleranceGap;
+        if (!isPhoneSearch && results.length > 0) {
+            const cutoff = results[0].score + 0.25;
             results = results.filter(res => res.score <= cutoff);
         }
 
-        // E. RETOUR AVEC AIDE A L'EPELLATION
+        // --- FORMATAGE FINAL DE LA RÉPONSE ---
         const limitedResults = results.slice(0, 5).map(res => ({
             nom: res.item.nom,
             prenom: res.item.prenom,
-            // C'EST ICI QUE CA SE JOUE : On donne l'épellation toute faite à l'IA
-            nom_epelle: formatSpelling(res.item.nom),       // "M-A-F-I-L-E-O"
-            prenom_epelle: formatSpelling(res.item.prenom), // "R-O-M-A-I-N"
+            nom_epelle: formatSpelling(res.item.nom),
+            prenom_epelle: formatSpelling(res.item.prenom),
+            telephone: formatPhoneNC(res.item.telephone),
             
-            telephone: formatPhoneNC(res.item.telephone), 
+            // --- NOUVEAU : ON ENVOIE LE TYPE À L'IA ---
+            type_ligne: res.item.typeTel, // Ex: "MOBILE" ou "FIXE"
+            
             adresse: res.item.adresse,
             ville: res.item.ville
         }));
 
         console.log(`[Tool: Search] ${limitedResults.length} résultats renvoyés.`);
         
-        if (limitedResults.length === 0) {
-            return "Aucun résultat trouvé dans l'annuaire.";
-        }
-
+        if (limitedResults.length === 0) return "Aucun résultat trouvé.";
+        
+        // On renvoie le JSON avec le champ 'type_ligne'
         return JSON.stringify(limitedResults);
 
     } catch (error) {
-        console.error("[Tool: Search] CRASH PENDANT LA RECHERCHE :", error);
-        return "Erreur technique lors de la recherche.";
+        console.error("[Tool: Search] CRASH :", error);
+        return "Erreur technique.";
     }
   },
 };

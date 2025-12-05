@@ -25,4 +25,5 @@ tools
 model
 n8n
 data/*
+exclu/*
 *.wav
