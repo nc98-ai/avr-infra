@@ -25,5 +25,5 @@ tools
 model
 n8n
 data/*
-exclu/*
+exclu/*.csv
 *.wav

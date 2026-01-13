@@ -74,6 +74,12 @@ docker exec -it avr-asterisk asterisk -rvvv  # dans une autre console
 
 
 
+# A FAIRE
+- [x] intégrer le fichier CSV non pas dans l'image DOCKER mais en tant que "montage lié" (Bind mount) via docker compose
+- [ ] corriger bug de fin d'appel (coupure de la ligne juste avant la fin de la phrase d'au revoir prononcée par l'IA)
+
+
+
 
 
 
